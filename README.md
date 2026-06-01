@@ -60,24 +60,39 @@ Isso criará uma cópia local do repositório em sua máquina.
 4. Extraia o arquivo ZIP para o local desejado em seu computador.
 
 
+## Dashboard de Banco de Dados
+
+A entrega da Unidade 2 de Banco de Dados está integrada a este repositório no diretório [`bd_dashboard/`](bd_dashboard/README.md).
+
+Esse módulo contém o dashboard Streamlit do Prontuário Ágil integrado a um banco MySQL, com scripts SQL, carga de dados fictícios do domínio da clínica, importação de dados públicos CNES/DataSUS e análises estatísticas para a apresentação.
+
+Execução resumida:
+
+```bash
+cd bd_dashboard
+./setup.sh
+source venv/bin/activate
+streamlit run app/inicio.py
+```
+
+Mais detalhes estão em [`docs/bd-dashboard.md`](docs/bd-dashboard.md).
+
 ## Estrutura do Projeto
 
-> *Esta seção pode variar conforme a organização do repositório de cada grupo.*
-
-```
-Eng-de-Software-UFRN/
-├── LICENSE
+```text
+prontuario-agil/
+├── agendamento/             # App Django do MVP de Engenharia de Software
+├── prontuario_project/      # Configuração do projeto Django
+├── bd_dashboard/            # Dashboard Streamlit + MySQL da entrega de BD
+├── docs/                    # Documentação do projeto e da integração de BD
+├── manage.py
 ├── README.md
-├── <diretório-x>/
-├── <diretório-y>/
-└── <diretório-z>/
+└── LICENSE
 ```
 
-- LICENSE: termos da licença do projeto (MIT).
-- README.md: este arquivo de apresentação.
-- X: descrição do diretório X.
-- Y: descrição do diretório Y.
-- Z: descrição do diretório Z.
+- `agendamento/`: models, services e testes do fluxo de agendamento.
+- `bd_dashboard/`: tabelas SQL, importação CNES/DataSUS e dashboard com CRUD/análises.
+- `docs/bd-dashboard.md`: resumo da integração BD para a entrega.
 
 ## Licença
 
