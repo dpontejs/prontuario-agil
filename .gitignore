@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+
+# Local databases and secrets
+.env
+*.sqlite3
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Public dataset files are downloaded locally, not versioned
+bd_dashboard/data/cnes/
