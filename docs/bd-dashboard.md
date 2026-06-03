@@ -16,6 +16,10 @@ O dashboard com integração ao MySQL está em `bd_dashboard/`.
 
 A base pública utilizada é o CNES/DataSUS, competência abril/2026, filtrada para o Rio Grande do Norte. O script importa estabelecimentos de saúde e vínculos profissionais, incluindo tipo de estabelecimento, município, CBO/especialidade e carga horária ambulatorial.
 
+## Modelo ER
+
+O diagrama ER em Mermaid e o resumo das relações estão em `docs/bd-modelagem.md`. Esse arquivo pode ser aberto diretamente no GitHub, que renderiza o bloco `mermaid` como diagrama visual.
+
 ## Modelo relacional
 
 Tabelas do domínio do Prontuário Ágil:

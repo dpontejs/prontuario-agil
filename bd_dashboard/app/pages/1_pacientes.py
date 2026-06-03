@@ -1,5 +1,6 @@
 import streamlit as st
 import sys, os
+from datetime import date
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from db import execute_read, execute_query
 
@@ -14,7 +15,12 @@ with tab_inserir:
         cpf = st.text_input("CPF", placeholder="000.000.000-00")
         email = st.text_input("Email")
         telefone = st.text_input("Telefone")
-        data_nasc = st.date_input("Data de Nascimento")
+        data_nasc = st.date_input(
+            "Data de Nascimento",
+            value=date(2000, 1, 1),
+            min_value=date(1900, 1, 1),
+            max_value=date.today(),
+        )
         submitted = st.form_submit_button("Cadastrar")
 
         if submitted and nome and cpf:
