@@ -14,14 +14,72 @@ fi
 
 echo "=== Setup do Prontuário Ágil — Dashboard BD ==="
 
+MYSQL_CONTAINER="prontuario_agil_bd_mysql"
+MYSQL_HOST="${DB_HOST:-127.0.0.1}"
+MYSQL_PORT="${DB_PORT:-3306}"
+MYSQL_USER="${DB_USER:-root}"
+MYSQL_PASSWORD="${DB_PASSWORD:-root123}"
+MYSQL_DATABASE="${DB_NAME:-clinica_db}"
+RECREATED_MYSQL=0
+
+export DB_HOST="$MYSQL_HOST"
+export DB_PORT="$MYSQL_PORT"
+export DB_USER="$MYSQL_USER"
+export DB_PASSWORD="$MYSQL_PASSWORD"
+export DB_NAME="$MYSQL_DATABASE"
+
+wait_for_mysql_container() {
+    until docker exec "$MYSQL_CONTAINER" mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" > /dev/null 2>&1; do
+        sleep 2
+    done
+}
+
+wait_for_mysql_host_port() {
+    python3 - "$MYSQL_HOST" "$MYSQL_PORT" <<'PY'
+import socket
+import sys
+import time
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+deadline = time.time() + 60
+
+while time.time() < deadline:
+    try:
+        with socket.create_connection((host, port), timeout=2):
+            sys.exit(0)
+    except OSError:
+        time.sleep(2)
+
+sys.exit(1)
+PY
+}
+
+ensure_mysql_port_published() {
+    local port_config
+    port_config="$(docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{if eq $p "3306/tcp"}}{{json $conf}}{{end}}{{end}}' "$MYSQL_CONTAINER" 2>/dev/null)"
+    if [ -z "$port_config" ] || [ "$port_config" = "null" ]; then
+        echo "Container MySQL sem porta 3306 publicada no host. Recriando serviço..."
+        "${COMPOSE[@]}" up -d --force-recreate mysql
+        RECREATED_MYSQL=1
+    fi
+}
+
 # 1. Subir MySQL
 echo ""
 echo "[1/4] Subindo MySQL..."
 "${COMPOSE[@]}" up -d
 echo "Aguardando MySQL iniciar..."
-until docker exec prontuario_agil_bd_mysql mysql -uroot -proot123 -e "SELECT 1" > /dev/null 2>&1; do
-    sleep 2
-done
+wait_for_mysql_container
+ensure_mysql_port_published
+if [ "$RECREATED_MYSQL" -eq 1 ]; then
+    wait_for_mysql_container
+fi
+if ! wait_for_mysql_host_port; then
+    echo "ERRO: MySQL respondeu no container, mas não em ${MYSQL_HOST}:${MYSQL_PORT}."
+    echo "Verifique se a porta ${MYSQL_PORT} está livre no host ou ajuste DB_PORT antes de executar o setup."
+    exit 1
+fi
 echo "MySQL pronto."
 
 # 2. Criar venv e instalar dependências

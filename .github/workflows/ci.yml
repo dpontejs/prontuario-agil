@@ -1,0 +1,84 @@
+name: Prontuario CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-django:
+    name: Test Django API
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    env:
+      DB_ENGINE: django.db.backends.mysql
+      DB_NAME: test_db
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      SECRET_KEY: dummy-key-for-ci
+      DEBUG: False
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install system dependencies for MySQL
+      run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev pkg-config
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install django mysqlclient; fi
+
+    - name: Run tests
+      run: |
+        python manage.py test
+
+  check-dashboard:
+    name: Check Dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install Dashboard dependencies
+      working-directory: ./bd_dashboard
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8
+
+    - name: Syntax and linting check
+      working-directory: ./bd_dashboard
+      run: |
+        # Checa erros de sintaxe e imports não resolvidos básicos
+        python -m compileall .
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics

@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
+import unicodedata
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from db import execute_read
@@ -142,25 +144,76 @@ fig_scatter = px.scatter(
 fig_scatter.update_layout(height=450, showlegend=False)
 st.plotly_chart(fig_scatter, use_container_width=True)
 
-st.subheader("3.2 Especialidades do Prontuário Ágil vs Realidade")
-st.markdown("Comparação entre as especialidades cadastradas no sistema e a disponibilidade real no RN:")
+st.subheader("3.2 Especialidades do sistema no recorte CNES")
+st.markdown("""
+Comparação entre as especialidades cadastradas no sistema e os vínculos profissionais encontrados
+nos dados CNES importados para o RN. O número abaixo é um recorte por CBO, não o total oficial de
+especialistas existentes no estado.
+""")
+
+termos_cbo_por_especialidade = {
+    "cardiologia": ["MEDICO CARDIOLOGISTA"],
+    "dermatologia": ["MEDICO DERMATOLOGISTA"],
+    "ortopedia": ["MEDICO ORTOPEDISTA"],
+    "pediatria": ["MEDICO PEDIATRA"],
+    "clinica geral": ["MEDICO CLINICO"],
+}
+
+
+def corrigir_texto_mojibake(texto):
+    if "Ã" not in texto and "Â" not in texto:
+        return texto
+    try:
+        return texto.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return texto
+
+
+def normalizar_especialidade(nome):
+    nome = corrigir_texto_mojibake(nome)
+    nome = unicodedata.normalize("NFKD", nome)
+    nome = "".join(char for char in nome if not unicodedata.combining(char))
+    return re.sub(r"\s+", " ", nome.strip().lower())
+
+
+def termos_busca_cbo(especialidade):
+    especialidade_normalizada = normalizar_especialidade(especialidade)
+    if especialidade_normalizada in termos_cbo_por_especialidade:
+        return termos_cbo_por_especialidade[especialidade_normalizada]
+    return [termo.upper() for termo in especialidade_normalizada.split() if len(termo) >= 4]
+
 
 esp_sistema = execute_read("SELECT DISTINCT especialidade FROM medico")
 if esp_sistema:
     comparativo = []
     for esp in esp_sistema:
-        nome = esp["especialidade"]
-        termo = nome.upper().split()[0]
+        nome = corrigir_texto_mojibake(esp["especialidade"])
+        termos = termos_busca_cbo(nome)
+        where = " OR ".join(["UPPER(cbo) LIKE %s"] * len(termos))
+        params = tuple(f"%{termo}%" for termo in termos)
         dados = execute_read(
-            "SELECT COUNT(*) as total, ROUND(AVG(carga_horaria), 1) as media_ch FROM profissional_cnes WHERE cbo LIKE %s",
-            (f"%{termo}%",)
+            f"""
+            SELECT
+                COUNT(*) as total,
+                ROUND(AVG(carga_horaria), 1) as media_ch,
+                GROUP_CONCAT(DISTINCT cbo ORDER BY cbo SEPARATOR '; ') as cbos_encontrados
+            FROM profissional_cnes
+            WHERE {where}
+            """,
+            params,
         )[0]
+        total = int(dados["total"] or 0)
+        cbos_encontrados = dados["cbos_encontrados"] or "Sem CBO correspondente no filtro usado"
         comparativo.append({
             "Especialidade (Sistema)": nome,
-            "Profissionais no RN": dados["total"],
-            "Carga Horária Média": f"{float(dados['media_ch'] or 0):.1f}h"
+            "Filtro CBO aplicado": " / ".join(termos),
+            "CBOs encontrados": cbos_encontrados,
+            "Vínculos CNES no RN": total,
+            "Carga Horária Média": f"{float(dados['media_ch'] or 0):.1f}h" if total else "Não calculada",
+            "Leitura": "Correspondência encontrada no CNES" if total else "Sem correspondência pelo filtro"
         })
     st.dataframe(pd.DataFrame(comparativo), use_container_width=True, hide_index=True)
+    st.caption("Fonte: CNES/DataSUS importado no projeto. A contagem representa vínculos ocupacionais cadastrados, não pessoas únicas nem uma estimativa oficial de disponibilidade médica.")
 else:
     st.info("Cadastre médicos no sistema para ver a comparação.")
 

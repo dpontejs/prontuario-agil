@@ -25,6 +25,48 @@ def run_sql_file(cursor, filepath):
             cursor.execute(statement)
 
 
+def corrigir_mojibake(valor):
+    if not isinstance(valor, str) or ("Ã" not in valor and "Â" not in valor):
+        return valor
+    try:
+        return valor.encode("latin1").decode("utf-8")
+    except UnicodeError:
+        return valor
+
+
+def reparar_textos_utf8(cursor):
+    campos_texto = {
+        "medico": ["nome", "especialidade"],
+        "paciente": ["nome", "email", "telefone"],
+        "prontuario": ["notas_clinicas", "diagnostico", "prescricao"],
+    }
+    total_corrigido = 0
+
+    for tabela, campos in campos_texto.items():
+        cursor.execute(f"SELECT id, {', '.join(campos)} FROM {tabela}")
+        for row in cursor.fetchall():
+            registro_id = row[0]
+            valores_corrigidos = []
+            campos_corrigidos = []
+
+            for campo, valor in zip(campos, row[1:]):
+                valor_corrigido = corrigir_mojibake(valor)
+                if valor_corrigido != valor:
+                    campos_corrigidos.append(campo)
+                    valores_corrigidos.append(valor_corrigido)
+
+            if campos_corrigidos:
+                set_clause = ", ".join(f"{campo}=%s" for campo in campos_corrigidos)
+                cursor.execute(
+                    f"UPDATE {tabela} SET {set_clause} WHERE id=%s",
+                    (*valores_corrigidos, registro_id),
+                )
+                total_corrigido += 1
+
+    if total_corrigido:
+        print(f"Textos com acentuação corrigidos: {total_corrigido} registros.")
+
+
 def main():
     sql_dir = os.path.join(os.path.dirname(__file__), "..", "sql")
 
@@ -47,6 +89,9 @@ def main():
     except mysql.connector.errors.IntegrityError:
         conn.rollback()
         print("Dados já existem (seed já foi executado).")
+
+    reparar_textos_utf8(cursor)
+    conn.commit()
 
     cursor.close()
     conn.close()
