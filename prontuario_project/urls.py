@@ -20,8 +20,9 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+# sdasdasdsadasdsd
 
-urlpatterns = [
+urlpatterns =  [
     path('admin/', admin.site.urls),
     
     # Rota para fazer Login (Gera o Token de acesso)
