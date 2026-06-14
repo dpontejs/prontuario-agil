@@ -1,0 +1,84 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Prontuários — Prontuário Ágil{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Registrar Prontuário</h1>
+  <p class="aviso">Acesso restrito a médicos autenticados.</p>
+
+  <form id="prontuario-form">
+    <label>ID do Paciente</label>
+    <input type="number" id="paciente_id" required>
+    <label>Notas Clínicas</label>
+    <textarea id="notas_clinicas" rows="3" required></textarea>
+    <label>Diagnóstico</label>
+    <textarea id="diagnostico" rows="2" required></textarea>
+    <label>Prescrição</label>
+    <textarea id="prescricao" rows="2" required></textarea>
+    <label>
+      <input type="checkbox" id="finalizado"> Finalizar prontuário
+    </label>
+    <button type="submit">Salvar</button>
+    <p id="pront-msg" class="msg" style="display:none"></p>
+  </form>
+
+  <hr>
+  <h2>Prontuários Registrados</h2>
+  <div id="lista-prontuarios"><p>Carregando...</p></div>
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+document.getElementById('prontuario-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const token = localStorage.getItem('access');
+  const msg = document.getElementById('pront-msg');
+  const res = await fetch('/api/prontuarios/', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      paciente_id: parseInt(document.getElementById('paciente_id').value),
+      notas_clinicas: document.getElementById('notas_clinicas').value,
+      diagnostico: document.getElementById('diagnostico').value,
+      prescricao: document.getElementById('prescricao').value,
+      finalizado: document.getElementById('finalizado').checked
+    })
+  });
+  const data = await res.json();
+  msg.style.display = 'block';
+  if (res.ok) {
+    msg.className = 'msg sucesso';
+    msg.textContent = 'Prontuário salvo com sucesso!';
+    carregarProntuarios();
+  } else if (res.status === 403) {
+    msg.className = 'msg erro';
+    msg.textContent = 'Acesso negado: apenas médicos podem registrar prontuários.';
+  } else {
+    msg.className = 'msg erro';
+    msg.textContent = data.detail || 'Erro ao salvar.';
+  }
+});
+
+async function carregarProntuarios() {
+  const token = localStorage.getItem('access');
+  const res = await fetch('/api/prontuarios/', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  if (!res.ok) { document.getElementById('lista-prontuarios').innerHTML = '<p>Sem acesso.</p>'; return; }
+  const prontuarios = await res.json();
+  const el = document.getElementById('lista-prontuarios');
+  if (!prontuarios.length) { el.innerHTML = '<p>Nenhum prontuário.</p>'; return; }
+  let html = '';
+  for (const p of prontuarios) {
+    const dt = new Date(p.data_registro).toLocaleString('pt-BR');
+    html += `<div class="card-inner">
+      <strong>${p.paciente.nome}</strong> — Dr(a). ${p.medico.nome} — ${dt}
+      ${p.finalizado ? '<span class="badge">Finalizado</span>' : ''}
+      <p><em>Diagnóstico:</em> ${p.diagnostico}</p>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+carregarProntuarios();
+</script>
+{% endblock %}

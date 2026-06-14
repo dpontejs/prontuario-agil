@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Prontuário Ágil{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'agendamento/style.css' %}">
+</head>
+<body>
+  <nav>
+    <a href="/">Prontuário Ágil</a>
+    <span id="nav-links">
+      <a href="/agendar/">Agendar</a>
+      <a href="/meus-agendamentos/">Meus Agendamentos</a>
+      <a href="/prontuario/" id="nav-prontuario" style="display:none">Prontuários</a>
+      <a href="#" onclick="logout()">Sair</a>
+    </span>
+    <span id="nav-login" style="display:none"><a href="/login/">Entrar</a></span>
+  </nav>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{% static 'agendamento/app.js' %}"></script>
+  {% block extra_script %}{% endblock %}
+</body>
+</html>

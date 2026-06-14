@@ -1,0 +1,65 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Agendar Consulta — Prontuário Ágil{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Agendar Consulta</h1>
+
+  <label>Filtrar por especialidade</label>
+  <div class="linha">
+    <input type="text" id="especialidade" placeholder="Ex: Cardiologia">
+    <button onclick="buscarMedicos()">Buscar</button>
+  </div>
+
+  <div id="lista-horarios" style="margin-top:1.5rem"></div>
+  <p id="agendar-msg" class="msg" style="display:none"></p>
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+async function buscarMedicos() {
+  const esp = document.getElementById('especialidade').value;
+  const token = localStorage.getItem('access');
+  const res = await fetch(`/api/medicos/?especialidade=${encodeURIComponent(esp)}`, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  if (!res.ok) { window.location.href = '/login/'; return; }
+  const medicos = await res.json();
+
+  let html = '';
+  for (const m of medicos) {
+    const hr = await fetch(`/api/horarios/?medico=${m.id}&disponivel=true`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const horarios = await hr.json();
+    if (!horarios.length) continue;
+    html += `<h3>${m.nome} — ${m.especialidade}</h3><ul>`;
+    for (const h of horarios) {
+      const dt = new Date(h.data_hora).toLocaleString('pt-BR');
+      html += `<li>${dt} <button onclick="agendar(${h.id})">Agendar</button></li>`;
+    }
+    html += '</ul>';
+  }
+  document.getElementById('lista-horarios').innerHTML = html || '<p>Nenhum horário disponível.</p>';
+}
+
+async function agendar(horario_id) {
+  const token = localStorage.getItem('access');
+  const msg = document.getElementById('agendar-msg');
+  const res = await fetch('/api/agendamentos/', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ horario_id, paciente_id: 1 })
+  });
+  const data = await res.json();
+  msg.style.display = 'block';
+  if (res.ok) {
+    msg.className = 'msg sucesso';
+    msg.textContent = 'Consulta agendada com sucesso! Status: ' + data.status;
+    buscarMedicos();
+  } else {
+    msg.className = 'msg erro';
+    msg.textContent = data.detail || 'Erro ao agendar.';
+  }
+}
+</script>
+{% endblock %}

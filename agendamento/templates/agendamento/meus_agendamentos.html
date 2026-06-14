@@ -1,0 +1,54 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Meus Agendamentos — Prontuário Ágil{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Meus Agendamentos</h1>
+  <div id="lista-agendamentos"><p>Carregando...</p></div>
+  <p id="cancel-msg" class="msg" style="display:none"></p>
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+async function carregarAgendamentos() {
+  const token = localStorage.getItem('access');
+  const res = await fetch('/api/agendamentos/', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  if (!res.ok) { window.location.href = '/login/'; return; }
+  const agendamentos = await res.json();
+  const el = document.getElementById('lista-agendamentos');
+  if (!agendamentos.length) { el.innerHTML = '<p>Nenhum agendamento encontrado.</p>'; return; }
+  let html = '<table><thead><tr><th>Médico</th><th>Data/Hora</th><th>Status</th><th>Ação</th></tr></thead><tbody>';
+  for (const a of agendamentos) {
+    const dt = new Date(a.horario.data_hora).toLocaleString('pt-BR');
+    const cancelarBtn = a.status !== 'CANCELADO'
+      ? `<button onclick="cancelar(${a.id})">Cancelar</button>`
+      : '—';
+    html += `<tr><td>${a.horario.medico.nome}</td><td>${dt}</td><td class="status-${a.status.toLowerCase()}">${a.status}</td><td>${cancelarBtn}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function cancelar(id) {
+  const token = localStorage.getItem('access');
+  const msg = document.getElementById('cancel-msg');
+  const res = await fetch(`/api/agendamentos/${id}/cancelar/`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  const data = await res.json();
+  msg.style.display = 'block';
+  if (res.ok) {
+    msg.className = 'msg sucesso';
+    msg.textContent = 'Agendamento cancelado.';
+    carregarAgendamentos();
+  } else {
+    msg.className = 'msg erro';
+    msg.textContent = data.detail || 'Erro ao cancelar.';
+  }
+}
+
+carregarAgendamentos();
+</script>
+{% endblock %}

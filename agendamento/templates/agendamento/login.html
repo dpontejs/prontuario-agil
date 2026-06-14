@@ -1,0 +1,39 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Login — Prontuário Ágil{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Entrar</h1>
+  <form id="login-form">
+    <label>Usuário</label>
+    <input type="text" id="username" required>
+    <label>Senha</label>
+    <input type="password" id="password" required>
+    <button type="submit">Entrar</button>
+    <p id="login-erro" class="erro" style="display:none"></p>
+  </form>
+</div>
+{% endblock %}
+{% block extra_script %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const erro = document.getElementById('login-erro');
+  const res = await fetch('/api/token/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password})
+  });
+  if (res.ok) {
+    const data = await res.json();
+    localStorage.setItem('access', data.access);
+    localStorage.setItem('refresh', data.refresh);
+    window.location.href = '/';
+  } else {
+    erro.textContent = 'Usuário ou senha inválidos.';
+    erro.style.display = 'block';
+  }
+});
+</script>
+{% endblock %}
