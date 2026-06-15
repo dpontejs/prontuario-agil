@@ -1,0 +1,179 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Agendamentos — Prontuário Ágil{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 id="page-title">Agendamentos</h1>
+  <p id="page-desc">Carregando...</p>
+</div>
+
+<div class="card">
+  <div class="tabs" id="tabs"></div>
+  <div id="alerta" class="alert" style="display:none"></div>
+  <div id="conteudo"><div class="loading"><span class="spinner"></span> Carregando...</div></div>
+</div>
+
+{% endblock %}
+{% block extra_script %}
+<script>
+const isMedico = localStorage.getItem('is_medico') === '1';
+let todosAgendamentos = [];
+
+// ── Configuração por papel ───────────────────────────────────
+const CONFIG = isMedico
+  ? {
+      titulo:  'Agenda de Consultas',
+      desc:    'Solicitações e consultas dos seus pacientes.',
+      abas: [
+        { label: 'Solicitações', status: 'RESERVADO'  },
+        { label: 'Confirmados',  status: 'CONFIRMADO' },
+        { label: 'Cancelados',   status: 'CANCELADO'  },
+      ],
+      colunas: ['Paciente', 'Especialidade', 'Data / Hora', 'Status', 'Ações'],
+      rowFn: rowMedico,
+    }
+  : {
+      titulo:  'Meus Agendamentos',
+      desc:    'Acompanhe e gerencie suas consultas.',
+      abas: [
+        { label: 'Todos',        status: 'todos'      },
+        { label: 'Reservados',   status: 'RESERVADO'  },
+        { label: 'Confirmados',  status: 'CONFIRMADO' },
+        { label: 'Cancelados',   status: 'CANCELADO'  },
+      ],
+      colunas: ['Médico', 'Especialidade', 'Data / Hora', 'Status', 'Ação'],
+      rowFn: rowPaciente,
+    };
+
+// ── Inicializa UI ────────────────────────────────────────────
+document.getElementById('page-title').textContent = CONFIG.titulo;
+document.getElementById('page-desc').textContent  = CONFIG.desc;
+
+const tabsEl = document.getElementById('tabs');
+CONFIG.abas.forEach((aba, i) => {
+  const div = document.createElement('div');
+  div.className = 'tab' + (i === 0 ? ' ativo' : '');
+  div.textContent = aba.label;
+  div.onclick = () => filtrar(aba.status, div);
+  tabsEl.appendChild(div);
+});
+
+// ── Dados ────────────────────────────────────────────────────
+async function carregarAgendamentos() {
+  const res = await authFetch('/api/agendamentos/');
+  if (!res.ok) return;
+  todosAgendamentos = await res.json();
+  renderizar(CONFIG.abas[0].status);
+}
+
+function filtrar(status, tabEl) {
+  document.querySelectorAll('#tabs .tab').forEach(t => t.classList.remove('ativo'));
+  tabEl.classList.add('ativo');
+  renderizar(status);
+}
+
+function renderizar(status) {
+  const lista = status === 'todos'
+    ? todosAgendamentos
+    : todosAgendamentos.filter(a => a.status === status);
+
+  const el = document.getElementById('conteudo');
+
+  if (!lista.length) {
+    el.innerHTML = '<div class="empty-state"><svg class="icon icon-2xl" style="color:var(--borda)"><use href="#icon-calendar"/></svg><p>Nenhum agendamento encontrado.</p></div>';
+    return;
+  }
+
+  const rows = lista.map(CONFIG.rowFn).join('');
+  const ths  = CONFIG.colunas.map(c => `<th>${c}</th>`).join('');
+  el.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>${ths}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Linha para visão do paciente ─────────────────────────────
+function rowPaciente(a) {
+  const dt    = fmtDt(a.horario.data_hora);
+  const badge = badgeHtml(a.status);
+  const acao  = a.status !== 'CANCELADO'
+    ? `<button class="btn btn-sm btn-perigo" onclick="cancelar(${a.id}, this)">Cancelar</button>`
+    : '<span class="text-suave text-sm">—</span>';
+  return `<tr>
+    <td><strong>${a.horario.medico.nome}</strong></td>
+    <td>${a.horario.medico.especialidade || '—'}</td>
+    <td>${dt}</td>
+    <td>${badge}</td>
+    <td>${acao}</td>
+  </tr>`;
+}
+
+// ── Linha para visão do médico ───────────────────────────────
+function rowMedico(a) {
+  const dt    = fmtDt(a.horario.data_hora);
+  const badge = badgeHtml(a.status);
+  let acoes = '<span class="text-suave text-sm">—</span>';
+  if (a.status === 'RESERVADO') {
+    acoes = `
+      <button class="btn btn-sm" onclick="confirmar(${a.id}, this)">Confirmar</button>
+      <button class="btn btn-sm btn-perigo" style="margin-left:.4rem" onclick="cancelar(${a.id}, this)">Cancelar</button>`;
+  } else if (a.status === 'CONFIRMADO') {
+    acoes = `<button class="btn btn-sm btn-perigo" onclick="cancelar(${a.id}, this)">Cancelar</button>`;
+  }
+  return `<tr>
+    <td><strong>${a.paciente_nome || '—'}</strong></td>
+    <td>${a.horario.medico.especialidade || '—'}</td>
+    <td>${dt}</td>
+    <td>${badge}</td>
+    <td>${acoes}</td>
+  </tr>`;
+}
+
+// ── Ações ────────────────────────────────────────────────────
+async function cancelar(id, btn) {
+  await executarAcao(id, btn, 'cancelar', '...', 'Cancelar', 'Agendamento cancelado com sucesso.');
+}
+
+async function confirmar(id, btn) {
+  await executarAcao(id, btn, 'confirmar', '...', 'Confirmar', 'Agendamento confirmado com sucesso.');
+}
+
+async function executarAcao(id, btn, acao, labelBusy, labelReset, msgSucesso) {
+  btn.disabled = true;
+  btn.textContent = labelBusy;
+  const res  = await authFetch(`/api/agendamentos/${id}/${acao}/`, { method: 'POST' });
+  const data = await res.json();
+  const alertEl = document.getElementById('alerta');
+
+  if (res.ok) {
+    alertEl.className = 'alert alert-sucesso';
+    alertEl.innerHTML = `<svg class="icon icon-sm"><use href="#icon-check"/></svg> ${msgSucesso}`;
+    alertEl.style.display = 'flex';
+    carregarAgendamentos();
+  } else {
+    alertEl.className = 'alert alert-erro';
+    alertEl.innerHTML = `<svg class="icon icon-sm"><use href="#icon-x"/></svg> ${data.detail || 'Erro ao executar ação.'}`;
+    alertEl.style.display = 'flex';
+    btn.disabled = false;
+    btn.textContent = labelReset;
+  }
+  setTimeout(() => { alertEl.style.display = 'none'; }, 5000);
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function fmtDt(iso) {
+  return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+const badgeClass = { RESERVADO: 'badge-reservado', CONFIRMADO: 'badge-confirmado', CANCELADO: 'badge-cancelado' };
+const badgeLabel = { RESERVADO: 'Reservado', CONFIRMADO: 'Confirmado', CANCELADO: 'Cancelado' };
+function badgeHtml(status) {
+  return `<span class="badge ${badgeClass[status]}">${badgeLabel[status]}</span>`;
+}
+
+carregarAgendamentos();
+</script>
+{% endblock %}

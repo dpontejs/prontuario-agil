@@ -1,0 +1,161 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Prontuários — Prontuário Ágil{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Prontuários Clínicos</h1>
+  <p>Registro restrito a médicos autenticados.</p>
+</div>
+
+<div class="card">
+  <h2 style="color:var(--primario);font-size:1.1rem;margin-bottom:1.25rem">Novo Registro</h2>
+
+  <form id="prontuario-form">
+    <div class="form-group">
+      <label for="paciente_sel">Paciente</label>
+      <select id="paciente_sel" required>
+        <option value="">Selecione o paciente...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="notas_clinicas">Notas Clínicas</label>
+      <textarea id="notas_clinicas" placeholder="Descreva as observações clínicas..." required></textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="diagnostico">Diagnóstico</label>
+        <textarea id="diagnostico" rows="3" placeholder="CID ou descrição diagnóstica..." required></textarea>
+      </div>
+      <div class="form-group">
+        <label for="prescricao">Prescrição</label>
+        <textarea id="prescricao" rows="3" placeholder="Medicamentos e instruções..." required></textarea>
+      </div>
+    </div>
+
+    <label class="checkbox-group">
+      <input type="checkbox" id="finalizado">
+      <span>Finalizar prontuário (não poderá ser editado após finalização)</span>
+    </label>
+
+    <div style="margin-top:1.25rem">
+      <button type="submit" class="btn">
+        <svg class="icon icon-sm" aria-hidden="true"><use href="#icon-save"/></svg>
+        Salvar Prontuário
+      </button>
+    </div>
+    <div id="pront-msg" class="alert" style="display:none"></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="color:var(--primario);font-size:1.1rem;margin-bottom:1.25rem">Prontuários Registrados</h2>
+  <div id="lista-prontuarios"><div class="loading"><span class="spinner"></span> Carregando...</div></div>
+</div>
+
+{% endblock %}
+{% block extra_script %}
+<script>
+(async function () {
+  const res = await authFetch('/api/pacientes/');
+  if (!res.ok) return;
+  const pacientes = await res.json();
+  const sel = document.getElementById('paciente_sel');
+  pacientes.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.nome} — CPF: ${p.cpf || '—'}`;
+    sel.appendChild(opt);
+  });
+})();
+
+document.getElementById('prontuario-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const msgEl = document.getElementById('pront-msg');
+  const btn = this.querySelector('button[type=submit]');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px"></span> Salvando...';
+
+  const res = await authFetch('/api/prontuarios/', {
+    method: 'POST',
+    body: JSON.stringify({
+      paciente_id:    parseInt(document.getElementById('paciente_sel').value),
+      notas_clinicas: document.getElementById('notas_clinicas').value,
+      diagnostico:    document.getElementById('diagnostico').value,
+      prescricao:     document.getElementById('prescricao').value,
+      finalizado:     document.getElementById('finalizado').checked,
+    }),
+  });
+  const data = await res.json();
+
+  btn.disabled = false;
+  btn.innerHTML = '<svg class="icon icon-sm"><use href="#icon-save"/></svg> Salvar Prontuário';
+
+  if (res.ok) {
+    msgEl.className = 'alert alert-sucesso';
+    msgEl.innerHTML = '<svg class="icon icon-sm"><use href="#icon-check"/></svg> Prontuário salvo com sucesso!';
+    msgEl.style.display = 'flex';
+    e.target.reset();
+    carregarProntuarios();
+  } else if (res.status === 403) {
+    msgEl.className = 'alert alert-erro';
+    msgEl.innerHTML = '<svg class="icon icon-sm"><use href="#icon-lock"/></svg> Acesso negado: apenas médicos podem registrar prontuários.';
+    msgEl.style.display = 'flex';
+  } else {
+    msgEl.className = 'alert alert-erro';
+    msgEl.innerHTML = '<svg class="icon icon-sm"><use href="#icon-x"/></svg> ' + (data.detail || 'Erro ao salvar.');
+    msgEl.style.display = 'flex';
+  }
+  setTimeout(() => { msgEl.style.display = 'none'; }, 6000);
+});
+
+async function carregarProntuarios() {
+  const el = document.getElementById('lista-prontuarios');
+  const res = await authFetch('/api/prontuarios/');
+  if (!res.ok) {
+    el.innerHTML = '<div class="alert alert-aviso"><svg class="icon icon-sm"><use href="#icon-alert"/></svg> Sem permissão para visualizar prontuários.</div>';
+    return;
+  }
+  const prontuarios = await res.json();
+  if (!prontuarios.length) {
+    el.innerHTML = '<div class="empty-state"><svg class="icon icon-2xl" style="color:var(--borda)"><use href="#icon-clipboard"/></svg><p>Nenhum prontuário registrado.</p></div>';
+    return;
+  }
+
+  el.innerHTML = prontuarios.map(p => {
+    const dt = new Date(p.data_registro).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const badgeFinalizado = p.finalizado
+      ? '<span class="badge badge-finalizado">Finalizado</span>'
+      : '<span class="badge badge-reservado">Em aberto</span>';
+    return `
+      <div class="pront-card">
+        <div class="pront-header" onclick="togglePront(this)">
+          <div>
+            <div class="pront-paciente">${p.paciente.nome}</div>
+            <div class="pront-meta">Dr(a). ${p.medico.nome} &nbsp;·&nbsp; ${dt}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:.6rem;flex-shrink:0">
+            ${badgeFinalizado}
+            <svg class="icon icon-sm chevron" aria-hidden="true"><use href="#icon-chevron-down"/></svg>
+          </div>
+        </div>
+        <div class="pront-body">
+          <div class="pront-field"><strong>Notas Clínicas</strong>${p.notas_clinicas || '—'}</div>
+          <div class="pront-field"><strong>Diagnóstico</strong>${p.diagnostico || '—'}</div>
+          <div class="pront-field"><strong>Prescrição</strong>${p.prescricao || '—'}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function togglePront(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron use');
+  body.classList.toggle('aberto');
+  chevron.setAttribute('href', body.classList.contains('aberto') ? '#icon-chevron-up' : '#icon-chevron-down');
+}
+
+carregarProntuarios();
+</script>
+{% endblock %}
