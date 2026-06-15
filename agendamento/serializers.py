@@ -19,10 +19,17 @@ class HorarioDisponivelSerializer(serializers.ModelSerializer):
 
 class AgendamentoSerializer(serializers.ModelSerializer):
     horario = HorarioDisponivelSerializer(read_only=True)
+    paciente_nome = serializers.SerializerMethodField()
 
     class Meta:
         model = Agendamento
-        fields = ["id", "horario", "paciente_id", "status", "data_criacao"]
+        fields = ["id", "horario", "paciente_id", "paciente_nome", "status", "data_criacao"]
+
+    def get_paciente_nome(self, obj):
+        try:
+            return Paciente.objects.get(pk=obj.paciente_id).nome
+        except Paciente.DoesNotExist:
+            return None
 
 
 class ReservarHorarioSerializer(serializers.Serializer):

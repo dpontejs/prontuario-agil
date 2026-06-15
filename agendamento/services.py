@@ -63,6 +63,21 @@ class AgendamentoService:
 
     @staticmethod
     @transaction.atomic
+    def confirmar_agendamento(agendamento_id: int) -> Agendamento:
+        try:
+            agendamento = Agendamento.objects.select_for_update().get(pk=agendamento_id)
+        except Agendamento.DoesNotExist:
+            raise ValidationError("Agendamento não encontrado.") from None
+
+        if agendamento.status != "RESERVADO":
+            raise ValidationError("Apenas agendamentos reservados podem ser confirmados.")
+
+        agendamento.status = "CONFIRMADO"
+        agendamento.save(update_fields=["status"])
+        return agendamento
+
+    @staticmethod
+    @transaction.atomic
     def registrar_prontuario(
         paciente_id: int,
         medico_id: int,
