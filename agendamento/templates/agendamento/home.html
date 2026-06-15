@@ -1,12 +1,93 @@
 {% extends "agendamento/base.html" %}
 {% block title %}Início — Prontuário Ágil{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>Bem-vindo ao Prontuário Ágil</h1>
+
+<div class="hero">
+  <h1>Bem-vindo, <span id="hero-username">...</span></h1>
   <p>Sistema de agendamento de consultas e gestão de prontuários médicos.</p>
-  <div class="acoes">
-    <a href="/agendar/" class="btn">Agendar Consulta</a>
-    <a href="/meus-agendamentos/" class="btn btn-secundario">Meus Agendamentos</a>
+</div>
+
+<div class="metrics-grid">
+  <div class="metric-card">
+    <svg class="icon icon-xl" style="color:var(--primario);margin-bottom:.5rem" aria-hidden="true"><use href="#icon-stethoscope"/></svg>
+    <div class="metric-value" id="m-medicos">—</div>
+    <div class="metric-label">Médicos</div>
+  </div>
+  <div class="metric-card">
+    <svg class="icon icon-xl" style="color:var(--acento);margin-bottom:.5rem" aria-hidden="true"><use href="#icon-calendar"/></svg>
+    <div class="metric-value" id="m-agendamentos">—</div>
+    <div class="metric-label">Agendamentos</div>
+  </div>
+  <div class="metric-card">
+    <svg class="icon icon-xl" style="color:var(--amarelo);margin-bottom:.5rem" aria-hidden="true"><use href="#icon-clock"/></svg>
+    <div class="metric-value" id="m-ativos">—</div>
+    <div class="metric-label">Consultas Ativas</div>
+  </div>
+  <div class="metric-card" id="card-prontuarios" style="display:none">
+    <svg class="icon icon-xl" style="color:var(--verde);margin-bottom:.5rem" aria-hidden="true"><use href="#icon-clipboard"/></svg>
+    <div class="metric-value" id="m-prontuarios">—</div>
+    <div class="metric-label">Prontuários</div>
   </div>
 </div>
+
+<div class="section-title">Acesso Rápido</div>
+<div class="actions-grid" id="actions-grid">
+  <a href="/agendar/" class="action-card" id="action-agendar" style="display:none">
+    <svg class="icon icon-xl action-icon" aria-hidden="true"><use href="#icon-calendar"/></svg>
+    <div class="action-title">Agendar Consulta</div>
+    <div class="action-desc">Busque médicos por especialidade e reserve um horário disponível.</div>
+  </a>
+  <a href="/meus-agendamentos/" class="action-card" id="action-meus-ag" style="display:none">
+    <svg class="icon icon-xl action-icon" aria-hidden="true"><use href="#icon-user"/></svg>
+    <div class="action-title" id="action-meus-ag-title">Meus Agendamentos</div>
+    <div class="action-desc" id="action-meus-ag-desc">Visualize e gerencie suas consultas agendadas.</div>
+  </a>
+  <a href="/prontuario/" class="action-card" id="action-prontuario" style="display:none">
+    <svg class="icon icon-xl action-icon" aria-hidden="true"><use href="#icon-clipboard"/></svg>
+    <div class="action-title">Prontuários</div>
+    <div class="action-desc">Registre e consulte prontuários clínicos dos pacientes.</div>
+  </a>
+</div>
+
+{% endblock %}
+{% block extra_script %}
+<script>
+(async function () {
+  document.getElementById('hero-username').textContent = localStorage.getItem('username') || '...';
+
+  const isMedico = localStorage.getItem('is_medico') === '1';
+  if (isMedico) {
+    document.getElementById('action-prontuario').style.display    = '';
+    document.getElementById('card-prontuarios').style.display     = '';
+    document.getElementById('action-meus-ag').style.display       = '';
+    document.getElementById('action-meus-ag-title').textContent   = 'Agenda';
+    document.getElementById('action-meus-ag-desc').textContent    = 'Gerencie as solicitações e consultas dos seus pacientes.';
+  } else {
+    document.getElementById('action-agendar').style.display  = '';
+    document.getElementById('action-meus-ag').style.display  = '';
+  }
+
+  try {
+    const [rMed, rAge] = await Promise.all([
+      authFetch('/api/medicos/'),
+      authFetch('/api/agendamentos/'),
+    ]);
+    if (rMed.ok) {
+      const medicos = await rMed.json();
+      document.getElementById('m-medicos').textContent = medicos.length;
+    }
+    if (rAge.ok) {
+      const agendamentos = await rAge.json();
+      document.getElementById('m-agendamentos').textContent = agendamentos.length;
+      document.getElementById('m-ativos').textContent = agendamentos.filter(a => a.status !== 'CANCELADO').length;
+    }
+    if (localStorage.getItem('is_medico') === '1') {
+      const rPront = await authFetch('/api/prontuarios/');
+      if (rPront.ok) {
+        document.getElementById('m-prontuarios').textContent = (await rPront.json()).length;
+      }
+    }
+  } catch (_) {}
+})();
+</script>
 {% endblock %}
