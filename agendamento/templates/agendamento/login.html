@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrar — Prontuário Ágil</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'agendamento/style.css' %}">
+</head>
+<body>
+{% include "agendamento/icons.html" %}
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg class="icon icon-2xl" style="color:var(--primario)" aria-hidden="true"><use href="#icon-hospital"/></svg>
+      <h1>Prontuário Ágil</h1>
+      <p>Sistema de gestão de clínicas médicas</p>
+    </div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Usuário</label>
+        <input type="text" id="username" placeholder="nome de usuário" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-full mt-2">Entrar</button>
+      <div id="login-erro" class="alert alert-erro" style="display:none">
+        <svg class="icon icon-sm" aria-hidden="true"><use href="#icon-x"/></svg>
+        <span id="login-erro-msg"></span>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const erroEl  = document.getElementById('login-erro');
+  erroEl.style.display = 'none';
+
+  const res = await fetch('/api/token/', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({username, password}),
+  });
+
+  if (!res.ok) {
+    document.getElementById('login-erro-msg').textContent = 'Usuário ou senha inválidos.';
+    erroEl.style.display = 'flex';
+    return;
+  }
+
+  const { access, refresh } = await res.json();
+  localStorage.setItem('access', access);
+  localStorage.setItem('refresh', refresh);
+  ['is_medico', 'is_superuser', 'username', 'paciente_id', 'medico_id'].forEach(k => localStorage.removeItem(k));
+
+  // Detecta papel antes de redirecionar
+  const meRes = await fetch('/api/me/', { headers: { 'Authorization': 'Bearer ' + access } });
+  if (meRes.ok) {
+    const me = await meRes.json();
+    localStorage.setItem('username',     me.username);
+    localStorage.setItem('is_medico',    me.is_medico    ? '1' : '0');
+    localStorage.setItem('is_paciente',  me.is_paciente  ? '1' : '0');
+    localStorage.setItem('is_superuser', me.is_superuser ? '1' : '0');
+    if (me.paciente_id) localStorage.setItem('paciente_id', me.paciente_id);
+    if (me.medico_id)   localStorage.setItem('medico_id',   me.medico_id);
+
+    // Usuários sem papel (admin puro) vão direto ao painel administrativo
+    if (!me.is_medico && !me.is_paciente) {
+      window.location.href = '/admin/';
+      return;
+    }
+  }
+
+  window.location.href = '/';
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+{% extends "agendamento/base.html" %}
+{% block title %}Agendar Consulta — Prontuário Ágil{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Agendar Consulta</h1>
+  <p>Filtre por especialidade e escolha um horário disponível.</p>
+</div>
+
+<div class="card">
+  <div class="search-bar">
+    <div class="form-group">
+      <label for="especialidade">Especialidade</label>
+      <select id="especialidade">
+        <option value="">Todas as especialidades</option>
+      </select>
+    </div>
+    <button class="btn" onclick="buscar()">
+      <svg class="icon icon-sm" aria-hidden="true"><use href="#icon-search"/></svg>
+      Buscar
+    </button>
+  </div>
+
+  <div id="alerta" class="alert" style="display:none"></div>
+  <div id="lista-medicos" class="medico-grid"></div>
+</div>
+
+{% endblock %}
+{% block extra_script %}
+<script>
+(async function () {
+  const res = await authFetch('/api/medicos/');
+  if (!res.ok) return;
+  const medicos = await res.json();
+  const especialidades = [...new Set(medicos.map(m => m.especialidade))].sort();
+  const sel = document.getElementById('especialidade');
+  especialidades.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e; opt.textContent = e;
+    sel.appendChild(opt);
+  });
+  buscar();
+})();
+
+async function buscar() {
+  const esp = document.getElementById('especialidade').value;
+  const listEl = document.getElementById('lista-medicos');
+  listEl.innerHTML = '<div class="loading"><span class="spinner"></span> Buscando médicos...</div>';
+
+  const url = '/api/medicos/' + (esp ? `?especialidade=${encodeURIComponent(esp)}` : '');
+  const res = await authFetch(url);
+  if (!res.ok) return;
+  const medicos = await res.json();
+
+  if (!medicos.length) {
+    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon-wrap"><svg class="icon icon-2xl" style="color:var(--borda)"><use href="#icon-search"/></svg></div><p>Nenhum médico encontrado.</p></div>';
+    return;
+  }
+
+  const resultados = await Promise.all(medicos.map(async m => {
+    const hr = await authFetch(`/api/horarios/?medico=${m.id}&disponivel=true`);
+    const horarios = hr.ok ? await hr.json() : [];
+    return { medico: m, horarios };
+  }));
+
+  const comHorarios = resultados.filter(r => r.horarios.length > 0);
+
+  if (!comHorarios.length) {
+    listEl.innerHTML = '<div class="empty-state"><svg class="icon icon-2xl" style="color:var(--borda)"><use href="#icon-calendar"/></svg><p>Nenhum horário disponível no momento.</p></div>';
+    return;
+  }
+
+  listEl.innerHTML = comHorarios.map(({ medico: m, horarios }) => `
+    <div class="medico-card">
+      <div class="medico-header">
+        <div class="medico-avatar">${m.nome.charAt(0)}</div>
+        <div class="medico-info">
+          <h3>Dr(a). ${m.nome}</h3>
+          <span class="especialidade">${m.especialidade}</span>
+        </div>
+      </div>
+      <div class="slots-label">Horários disponíveis</div>
+      <div class="slots-grid">
+        ${horarios.map(h => {
+          const dt = new Date(h.data_hora).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+          return `<button class="slot-btn" onclick="agendar(${h.id}, this)">${dt}</button>`;
+        }).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function agendar(horario_id, btn) {
+  const paciente_id = parseInt(localStorage.getItem('paciente_id') || '0');
+  if (!paciente_id) {
+    mostrarAlerta('Seu usuário não está vinculado a um paciente. Peça ao administrador para configurar.', 'aviso');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Aguarde...';
+
+  const res = await authFetch('/api/agendamentos/', {
+    method: 'POST',
+    body: JSON.stringify({ horario_id, paciente_id }),
+  });
+  const data = await res.json();
+
+  if (res.ok) {
+    mostrarAlerta('Consulta agendada com sucesso!', 'sucesso');
+    buscar();
+  } else {
+    mostrarAlerta(data.detail || 'Erro ao agendar.', 'erro');
+    btn.disabled = false;
+    btn.textContent = btn.getAttribute('data-dt') || 'Tentar novamente';
+  }
+}
+
+function mostrarAlerta(msg, tipo) {
+  const el = document.getElementById('alerta');
+  el.className = `alert alert-${tipo}`;
+  el.textContent = msg;
+  el.style.display = 'flex';
+  setTimeout(() => { el.style.display = 'none'; }, 5000);
+}
+</script>
+{% endblock %}

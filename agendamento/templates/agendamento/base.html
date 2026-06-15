@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Prontuário Ágil{% endblock %}</title>
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'agendamento/style.css' %}">
+</head>
+<body>
+  {% include "agendamento/icons.html" %}
+
+  <nav class="navbar">
+    <a class="navbar-brand" href="/">
+      <svg class="icon icon-lg" aria-hidden="true"><use href="#icon-hospital"/></svg>
+      Prontuário Ágil
+    </a>
+    <div class="navbar-links">
+      <a href="/">Início</a>
+      <a href="/agendar/"             id="nav-agendar"            style="display:none">Agendar</a>
+      <a href="/meus-agendamentos/"   id="nav-meus-agendamentos"  style="display:none">Meus Agendamentos</a>
+      <a href="/prontuario/"          id="nav-prontuario"         style="display:none">Prontuários</a>
+    </div>
+    <div class="navbar-user">
+      <span class="navbar-username" id="nav-username"></span>
+      <button class="btn-logout" onclick="logout()">Sair</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="{% static 'agendamento/app.js' %}"></script>
+  {% block extra_script %}{% endblock %}
+</body>
+</html>
