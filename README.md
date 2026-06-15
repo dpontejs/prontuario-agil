@@ -63,8 +63,12 @@ pip install -r requirements.txt
 # 4. Aplicar migrações
 python manage.py migrate
 
-# 5. Criar superusuário (para acessar /admin/ e testar a API)
-python manage.py createsuperuser
+# 5. Criar usuário padrão do sistema (username: super / senha: 12345678)
+python manage.py criar_usuario_padrao
+
+# 6. (Opcional) Popular o banco com dados de demonstração
+#    Cria usuários medico/paciente e dados pré-cadastrados para apresentação
+python manage.py popular_banco
 ```
 
 ### Variáveis de ambiente (opcional — MySQL)
@@ -94,15 +98,15 @@ python manage.py runserver
 
 Acesse em `http://localhost:8000/`:
 
-| URL | Descrição |
-|---|---|
-| `/` | Página inicial |
-| `/login/` | Login com JWT |
-| `/agendar/` | Buscar médicos e agendar (requer login) |
-| `/meus-agendamentos/` | Ver e cancelar agendamentos |
-| `/prontuario/` | Registrar prontuários (apenas médicos) |
-| `/api/` | DRF Browsable API |
-| `/admin/` | Django Admin (superuser) |
+| URL | Descrição | Acesso |
+|---|---|---|
+| `/` | Página inicial | JWT (médico ou paciente) |
+| `/login/` | Login com JWT | Pública |
+| `/agendar/` | Buscar médicos e agendar | JWT — apenas paciente |
+| `/meus-agendamentos/` | Ver e cancelar agendamentos | JWT — apenas paciente |
+| `/prontuario/` | Registrar prontuários clínicos | JWT — apenas médico |
+| `/api/` | DRF Browsable API | JWT |
+| `/admin/` | Django Admin | Superuser |
 
 ### Dashboard de Banco de Dados
 
@@ -145,10 +149,13 @@ curl http://localhost:8000/api/medicos/ \
 
 | Papel | Como configurar | Acesso |
 |---|---|---|
-| **Médico** | Vincular `User` a um `Medico` via `/admin/` | API de prontuários + leitura geral |
-| **Paciente** | Qualquer usuário autenticado | Agendar, cancelar, listar horários |
+| **Superuser** | `python manage.py criar_usuario_padrao` | Somente `/admin/` |
+| **Médico** | Vincular `User` a um `Medico` via `/admin/` | Prontuários + leitura geral |
+| **Paciente** | Vincular `User` a um `Paciente` via `/admin/` | Agendar, cancelar, listar horários |
 | Sem token | — | 401 em todos os endpoints `/api/` |
 | Token sem papel Médico | — | 403 em `POST /api/prontuarios/` |
+
+> **Demo rápida:** após `python manage.py popular_banco` os usuários `medico` e `paciente` (senha `12345678`) já estão vinculados aos papéis corretos.
 
 ---
 
@@ -162,7 +169,10 @@ curl http://localhost:8000/api/medicos/ \
 | `GET` | `/api/horarios/` | Lista horários (filtro: `?medico=&disponivel=true`) | JWT |
 | `POST` | `/api/agendamentos/` | Reserva um horário (US01) | JWT |
 | `POST` | `/api/agendamentos/{id}/cancelar/` | Cancela agendamento (US02) | JWT |
+| `POST` | `/api/agendamentos/{id}/confirmar/` | Confirma agendamento (médico) | JWT |
+| `GET` | `/api/me/` | Perfil do usuário autenticado (papel, ids) | JWT |
 | `GET` | `/api/agendamentos/` | Lista agendamentos | JWT |
+| `GET` | `/api/pacientes/` | Lista pacientes | JWT |
 | `POST` | `/api/prontuarios/` | Registra prontuário (US03) | JWT + IsMedico |
 | `GET` | `/api/prontuarios/` | Lista prontuários | JWT + IsMedico |
 
